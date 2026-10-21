@@ -1,0 +1,14 @@
+{
+  "name": "UPI Display Control",
+  "short_name": "UPI Display",
+  "description": "Set the amount and settings of your Smart UPI QR Display over Bluetooth.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f5f9",
+  "theme_color": "#0b3d91",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

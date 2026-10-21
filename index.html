@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d91">
+<title>UPI Display</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  /* ====================== THEME ====================== */
+  :root {
+    --brand: #0b3d91;
+    --brand-ink: #ffffff;
+    --bg: #f3f5f9;
+    --card: #ffffff;
+    --ink: #17202e;
+    --muted: #5d6878;
+    --line: #dde2ea;
+    --key: #eef1f6;
+    --ok: #0f9d58;
+    --warn: #e08a00;
+    --err: #d93025;
+    --amount: #0b3d91;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141c;
+      --card: #18202b;
+      --ink: #e8edf5;
+      --muted: #9aa6b8;
+      --line: #2a3442;
+      --key: #222c39;
+      --amount: #ffd600;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  button, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ====================== HEADER ====================== */
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: var(--brand); color: var(--brand-ink);
+  }
+  .brand { font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+  .conn {
+    border: 1.5px solid rgba(255,255,255,.7); background: transparent; color: #fff;
+    border-radius: 999px; padding: 7px 16px; font-weight: 600;
+  }
+  .conn.on { background: #fff; color: var(--brand); border-color: #fff; }
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; font-size: 14px; color: var(--muted);
+    background: var(--card); border-bottom: 1px solid var(--line);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); }
+  .dot.busy { background: var(--warn); animation: pulse 1s infinite; }
+  .dot.err { background: var(--err); }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  main { max-width: 480px; margin: 0 auto; padding: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  ol { margin: 0; padding-left: 20px; color: var(--muted); }
+  ol li { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+
+  /* ====================== TABS ====================== */
+  .tabs { display: flex; gap: 6px; background: var(--key); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+  .tabs button {
+    flex: 1; border: 0; background: transparent; padding: 9px; border-radius: 9px;
+    font-weight: 600; color: var(--muted);
+  }
+  .tabs button.active { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  /* ====================== BILLING ====================== */
+  .now { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; color: var(--muted); }
+  .now b { color: var(--ink); font-size: 16px; }
+  .amount {
+    display: flex; align-items: baseline; justify-content: center; gap: 6px;
+    margin: 14px 0 6px; color: var(--amount); font-weight: 700;
+    font-variant-numeric: tabular-nums; min-height: 64px;
+  }
+  .amount .rs { font-size: 30px; }
+  .amount #amtEntry { font-size: 52px; letter-spacing: -1px; word-break: break-all; }
+  .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 6px 0 12px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--card); border-radius: 999px;
+    padding: 6px 11px; font-weight: 600; font-size: 14px;
+  }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .keypad button {
+    border: 0; background: var(--key); border-radius: 12px;
+    height: 58px; font-size: 24px; font-weight: 600;
+  }
+  .keypad button:active, .chip:active { transform: scale(.97); }
+  .row { display: flex; gap: 10px; margin-top: 12px; }
+  .btn {
+    flex: 1; border: 0; border-radius: 12px; padding: 15px 12px;
+    font-weight: 700; font-size: 16px;
+  }
+  .btn.primary { background: var(--brand); color: #fff; }
+  .btn.secondary { background: var(--key); }
+  .btn.danger { background: transparent; color: var(--err); border: 1.5px solid var(--err); }
+  .btn:disabled { opacity: .45; }
+
+  /* ====================== FORMS ====================== */
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+  input[type=text], input[type=password], input[type=number], input[type=tel] {
+    width: 100%; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* ====================== LOG / TOAST ====================== */
+  details.log summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  details.log pre {
+    max-height: 220px; overflow: auto; font-size: 12px; margin: 10px 0 0;
+    background: var(--bg); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all;
+  }
+  #toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(120px);
+    max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 12px;
+    background: #17202e; color: #fff; font-weight: 600; font-size: 15px;
+    transition: transform .25s ease; z-index: 10; text-align: center;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { background: var(--ok); }
+  #toast.err { background: var(--err); }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">UPI Display</div>
+  <button id="connBtn" class="conn">Connect</button>
+</header>
+<div class="status"><span id="dot" class="dot"></span><span id="statusText">Not connected</span></div>
+
+<main>
+  <!-- Shown when the browser has no Web Bluetooth (iPhone, Firefox ...) -->
+  <section id="unsupported" class="card" hidden>
+    <h2>This browser can't use Bluetooth</h2>
+    <p class="muted">Open this page in <b>Google Chrome on Android</b> (or Chrome / Edge on a laptop).
+      iPhone Safari does not support Web Bluetooth.</p>
+  </section>
+
+  <!-- Shown before the first connection -->
+  <section id="welcome" class="card">
+    <h2>Connect to your display</h2>
+    <ol>
+      <li><b>First time only:</b> hold the display's <b>BOOT</b> button for 3 seconds. It shows <b>PAIRING MODE</b>.</li>
+      <li>Tap <b>Connect</b> above and choose <b>UPI-QR-xxxx</b>.</li>
+      <li>Type the 6-digit code shown on the display into the phone's pairing popup.</li>
+      <li>Next time, just tap Connect. No code is needed.</li>
+    </ol>
+  </section>
+
+  <section id="app" hidden>
+    <nav class="tabs">
+      <button data-tab="bill" class="active">Billing</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- ===================== BILLING TAB ===================== -->
+    <div id="tab-bill">
+      <div class="card">
+        <div class="now"><span>On display now</span><b id="curAmt">-</b></div>
+        <div class="amount" aria-live="polite"><span class="rs">₹</span><span id="amtEntry">0</span></div>
+        <div class="chips">
+          <button class="chip" data-add="10">+10</button>
+          <button class="chip" data-add="20">+20</button>
+          <button class="chip" data-add="50">+50</button>
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+        </div>
+        <div class="keypad" id="keypad">
+          <button>1</button><button>2</button><button>3</button>
+          <button>4</button><button>5</button><button>6</button>
+          <button>7</button><button>8</button><button>9</button>
+          <button>.</button><button>0</button><button data-key="back" aria-label="Delete">⌫</button>
+        </div>
+        <label for="noteInput">Note for customer (optional)</label>
+        <input id="noteInput" type="text" maxlength="25" placeholder="e.g. Bill 101" autocomplete="off">
+        <div class="row">
+          <button id="clearBtn" class="btn secondary">Clear QR</button>
+          <button id="sendBtn" class="btn primary">Show on display</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== SETTINGS TAB ===================== -->
+    <div id="tab-settings" hidden>
+      <!-- First time: create admin PIN -->
+      <div id="pinCreate" class="card" hidden>
+        <h2>Create admin PIN</h2>
+        <p class="muted">This PIN protects your UPI ID. Only you should know it. It is saved inside the display, never on this phone.</p>
+        <label for="newPin1">New PIN (4–8 digits)</label>
+        <input id="newPin1" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
+        <label for="newPin2">Confirm PIN</label>
+        <input id="newPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
+        <div class="row"><button id="createPinBtn" class="btn primary">Create PIN</button></div>
+      </div>
+
+      <!-- Locked: ask for PIN -->
+      <div id="pinLogin" class="card" hidden>
+        <h2>Settings are locked</h2>
+        <p class="muted">Enter your admin PIN to change the UPI ID, names and texts.</p>
+        <label for="loginPin">Admin PIN</label>
+        <input id="loginPin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password">
+        <div class="row"><button id="loginBtn" class="btn primary">Unlock</button></div>
+      </div>
+
+      <!-- Unlocked: owner settings -->
+      <div id="adminPanel" hidden>
+        <div class="card">
+          <h2>Payment details</h2>
+          <label for="f_UPI">UPI ID</label>
+          <input id="f_UPI" type="text" maxlength="50" placeholder="shopname@ybl" autocapitalize="off" autocomplete="off">
+          <div class="hint">Use a merchant / business UPI ID for amount QR codes.</div>
+          <label for="f_NAME">Payee name (inside QR)</label>
+          <input id="f_NAME" type="text" maxlength="40" autocomplete="off">
+        </div>
+        <div class="card">
+          <h2>Screen text</h2>
+          <label for="f_TOP1">Top line 1</label>
+          <input id="f_TOP1" type="text" maxlength="20" autocomplete="off">
+          <label for="f_TOP2">Top line 2 (optional)</label>
+          <input id="f_TOP2" type="text" maxlength="20" autocomplete="off">
+          <label for="f_BOT">Bottom number (shown when no amount)</label>
+          <input id="f_BOT" type="tel" maxlength="20" autocomplete="off">
+          <label for="f_TIMEOUT">Clear amount after (minutes, 0 = never)</label>
+          <input id="f_TIMEOUT" type="number" min="0" max="60" inputmode="numeric">
+          <div class="row"><button id="saveBtn" class="btn primary">Save changes</button></div>
+        </div>
+        <div class="card">
+          <h2>Change admin PIN</h2>
+          <label for="chPin1">New PIN</label>
+          <input id="chPin1" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
+          <label for="chPin2">Confirm new PIN</label>
+          <input id="chPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
+          <div class="row"><button id="changePinBtn" class="btn secondary">Change PIN</button></div>
+        </div>
+        <div class="card">
+          <h2>Security</h2>
+          <div class="row"><button id="logoutBtn" class="btn secondary">Lock settings</button></div>
+          <div class="row"><button id="unpairBtn" class="btn danger">Remove all paired phones</button></div>
+          <p class="hint">After removing, every phone must pair again using the BOOT button.</p>
+        </div>
+      </div>
+
+      <p class="muted" style="text-align:center">Device <span id="devName">-</span> · Firmware <span id="fwVer">-</span></p>
+    </div>
+
+    <div class="card">
+      <details class="log"><summary>Device log</summary><pre id="log"></pre></details>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+// ===================== MUST MATCH THE ESP32 FIRMWARE =====================
+const SVC_UUID    = '6b1c0001-5a3e-4c2b-9f1d-8e7a2c4b6d10';
+const CMD_UUID    = '6b1c0002-5a3e-4c2b-9f1d-8e7a2c4b6d10';   // phone -> ESP (write)
+const STATUS_UUID = '6b1c0003-5a3e-4c2b-9f1d-8e7a2c4b6d10';   // ESP -> phone (notify)
+const MAX_AMOUNT  = 100000;
+const REPLY_TIMEOUT_MS = 6000;
+
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+// ============================== STATE ==============================
+const ble = {
+  device: null, cmdChr: null, stsChr: null,
+  connected: false, connecting: false, userDisconnect: false, retries: 0,
+  rxBuf: '',                     // partial line from notifications
+  pending: [],                   // waiters for OK/ERR replies (FIFO)
+  writeChain: Promise.resolve()  // Web Bluetooth allows one write at a time
+};
+const info = {};                 // values reported by the display (UPI, NAME, AMT ...)
+let amountEntry = '0';
+const dirty = new Set();         // settings fields the owner is editing
+
+// ============================== UI HELPERS ==============================
+function setStatus(text, kind) {
+  $('statusText').textContent = text;
+  $('dot').className = 'dot' + (kind ? ' ' + kind : '');
+}
+
+let toastTimer;
+function toast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 2600);
+}
+
+function log(line) {
+  const el = $('log');
+  const lines = (el.textContent + line + '\n').split('\n');
+  el.textContent = lines.slice(-120).join('\n');
+  el.scrollTop = el.scrollHeight;
+}
+
+const inr = v => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const oneLine = s => String(s).replace(/[\r\n]/g, ' ').trim();
+
+// ============================== BLE LINK ==============================
+async function connect() {
+  if (ble.connecting) return;
+  ble.connecting = true;
+  $('connBtn').disabled = true;
+  ble.userDisconnect = false;
+  try {
+    if (!ble.device) {
+      setStatus('Choose your display…', 'busy');
+      ble.device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC_UUID] }] });
+      ble.device.addEventListener('gattserverdisconnected', onDisconnected);
+    }
+    setStatus('Connecting to ' + ble.device.name + '…', 'busy');
+    const server = await ble.device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC_UUID);
+    ble.cmdChr = await svc.getCharacteristic(CMD_UUID);
+    ble.stsChr = await svc.getCharacteristic(STATUS_UUID);
+    ble.stsChr.oncharacteristicvaluechanged = onNotify;   // property, so reconnects don't add duplicates
+
+    // Subscribing needs an encrypted link. On a new phone Android shows the
+    // pairing popup now, so keep retrying while the owner types the code.
+    setStatus('Securing link… (new phone: enter the code shown on the display)', 'busy');
+    for (let i = 0; ; i++) {
+      try { await ble.stsChr.startNotifications(); break; }
+      catch (e) {
+        if (i >= 25 || !ble.device.gatt.connected) throw e;
+        await sleep(2000);
+      }
+    }
+
+    ble.connected = true;
+    ble.retries = 0;
+    // The first GET can be lost while pairing finishes, so try a few times
+    let r;
+    for (let i = 0; i < 5; i++) {
+      r = await sendCmd('GET');
+      if (r.ok) break;
+      await sleep(1500);
+    }
+    if (!r.ok) throw new Error('Display did not answer. Is this phone paired?');
+
+    setStatus('Connected to ' + ble.device.name, 'ok');
+    $('connBtn').textContent = 'Disconnect';
+    $('connBtn').classList.add('on');
+    $('welcome').hidden = true;
+    $('app').hidden = false;
+  } catch (e) {
+    if (e.name === 'NotFoundError') { setStatus('Not connected', ''); return; }   // chooser cancelled
+    console.error(e);
+    setStatus('Could not connect', 'err');
+    toast(friendlyError(e), 'err');
+    log('! ' + e.message);
+    if (ble.device && ble.device.gatt.connected) { ble.userDisconnect = true; ble.device.gatt.disconnect(); }
+  } finally {
+    ble.connecting = false;
+    $('connBtn').disabled = false;
+  }
+}
+
+function friendlyError(e) {
+  const m = (e && e.message) || '';
+  if (/auth|encrypt|pair/i.test(m)) return 'Pairing failed. Hold BOOT 3 s on the display and try again.';
+  if (/GATT Server is disconnected|disconnected/i.test(m)) return 'Display disconnected. If this is a new phone, hold BOOT 3 s first.';
+  return m || 'Connection failed';
+}
+
+function disconnect() {
+  ble.userDisconnect = true;
+  if (ble.device && ble.device.gatt.connected) ble.device.gatt.disconnect();
+}
+
+function onDisconnected() {
+  ble.connected = false;
+  ble.rxBuf = '';
+  while (ble.pending.length) settle(ble.pending[0], { ok: false, msg: 'Disconnected' });
+  $('connBtn').textContent = 'Connect';
+  $('connBtn').classList.remove('on');
+  setStatus('Disconnected', 'err');
+  log('! disconnected');
+  // Reconnect automatically if the link dropped by itself (out of range, screen off ...)
+  if (!ble.userDisconnect && ble.retries < 3) {
+    ble.retries++;
+    setTimeout(() => { if (!ble.connected) connect(); }, 1500 * ble.retries);
+  }
+}
+
+// Notifications arrive in MTU-sized chunks; lines end with '\n'
+function onNotify(ev) {
+  ble.rxBuf += dec.decode(ev.target.value);
+  let i;
+  while ((i = ble.rxBuf.indexOf('\n')) >= 0) {
+    const line = ble.rxBuf.slice(0, i).trim();
+    ble.rxBuf = ble.rxBuf.slice(i + 1);
+    if (line) handleLine(line);
+  }
+}
+
+function handleLine(line) {
+  log('← ' + line);
+  const m = line.match(/^(OK|ERR)\b\s*(.*)$/);
+  if (m) {
+    const ok = m[1] === 'OK';
+    const msg = m[2];
+    if (ok && msg.includes('=')) applyValue(msg);
+    if (ok && msg === 'LOGIN') applyValue('ADMIN=1');
+    if (ok && msg === 'LOGOUT') applyValue('ADMIN=0');
+    if (ok && msg === 'PIN SET') { applyValue('PIN=SET'); applyValue('ADMIN=1'); }
+    if (!ok && /LOGIN REQUIRED/.test(msg)) applyValue('ADMIN=0');
+    if (ble.pending.length) settle(ble.pending[0], { ok, msg });
+  } else if (line.includes('=')) {
+    applyValue(line);                       // e.g. "UPI=shop@ybl" or auto-clear "AMT=0"
+  }
+}
+
+// Send one command and wait for its OK/ERR reply
+function sendCmd(cmd) {
+  return new Promise(resolve => {
+    if (!ble.cmdChr || !ble.device || !ble.device.gatt.connected) {
+      resolve({ ok: false, msg: 'Not connected' });
+      return;
+    }
+    const waiter = { resolve, timer: null };
+    waiter.timer = setTimeout(() => settle(waiter, { ok: false, msg: 'No reply from display' }), REPLY_TIMEOUT_MS);
+    ble.pending.push(waiter);
+    log('→ ' + (cmd.startsWith('LOGIN=') || cmd.startsWith('SETPIN=') ? cmd.split('=')[0] + '=****' : cmd));
+    ble.writeChain = ble.writeChain
+      .then(() => ble.cmdChr.writeValueWithResponse(enc.encode(cmd + '\n')))
+      .catch(e => settle(waiter, { ok: false, msg: e.message }));
+  });
+}
+
+function settle(waiter, result) {
+  const i = ble.pending.indexOf(waiter);
+  if (i < 0) return;
+  ble.pending.splice(i, 1);
+  clearTimeout(waiter.timer);
+  waiter.resolve(result);
+}
+
+// ============================== DISPLAY STATE ==============================
+function applyValue(kv) {
+  const i = kv.indexOf('=');
+  const key = kv.slice(0, i).trim();
+  const val = kv.slice(i + 1);
+  info[key] = val;
+
+  if (key === 'AMT') $('curAmt').textContent = Number(val) > 0 ? '₹ ' + inr(val) : 'No amount';
+  if (key === 'DEV') $('devName').textContent = val;
+  if (key === 'FW')  $('fwVer').textContent = val;
+  if (key === 'PIN' || key === 'ADMIN') renderSettingsView();
+
+  const field = $('f_' + key);
+  if (field && !dirty.has(key)) field.value = val;
+}
+
+function renderSettingsView() {
+  const pinSet = info.PIN === 'SET';
+  const admin = info.ADMIN === '1';
+  $('pinCreate').hidden = pinSet;
+  $('pinLogin').hidden = !pinSet || admin;
+  $('adminPanel').hidden = !pinSet || !admin;
+}
+
+// ============================== BILLING ==============================
+function renderEntry() { $('amtEntry').textContent = amountEntry; }
+
+function pressKey(k) {
+  let s = amountEntry;
+  if (k === 'back') s = s.length > 1 ? s.slice(0, -1) : '0';
+  else if (k === '.') { if (!s.includes('.')) s += '.'; }
+  else {
+    const [whole, frac] = s.split('.');
+    if (frac !== undefined && frac.length >= 2) return;      // max 2 decimals
+    if (frac === undefined && whole.length >= 6) return;     // max 6 digits
+    s = s === '0' ? k : s + k;
+  }
+  if (Number(s) > MAX_AMOUNT) { toast('Maximum is ₹ ' + inr(MAX_AMOUNT), 'err'); return; }
+  amountEntry = s;
+  renderEntry();
+}
+
+function addAmount(n) {
+  const v = Math.round((Number(amountEntry) + n) * 100) / 100;
+  if (v > MAX_AMOUNT) { toast('Maximum is ₹ ' + inr(MAX_AMOUNT), 'err'); return; }
+  amountEntry = String(v);
+  renderEntry();
+}
+
+async function sendAmount() {
+  const v = Number(amountEntry);
+  if (!(v > 0)) { toast('Enter an amount first', 'err'); return; }
+  const btn = $('sendBtn');
+  btn.disabled = true;
+  try {
+    const noteRes = await sendCmd('NOTE=' + oneLine($('noteInput').value).slice(0, 25));
+    if (!noteRes.ok) { toast(noteRes.msg, 'err'); return; }
+    const r = await sendCmd('AMT=' + v.toFixed(2));
+    if (r.ok) {
+      toast('₹ ' + inr(v) + ' is on the display', 'ok');
+      amountEntry = '0';
+      $('noteInput').value = '';
+      renderEntry();
+    } else toast(r.msg, 'err');
+  } finally { btn.disabled = false; }
+}
+
+async function clearAmount() {
+  const r = await sendCmd('CLR');
+  toast(r.ok ? 'QR cleared. Customer will type the amount.' : r.msg, r.ok ? 'ok' : 'err');
+}
+
+// ============================== SETTINGS ==============================
+const isPin = p => /^\d{4,8}$/.test(p);
+const isText = (s, max) => s.length <= max && /^[\x20-\x7E]*$/.test(s);
+
+async function createPin() {
+  const a = $('newPin1').value, b = $('newPin2').value;
+  if (!isPin(a)) return toast('PIN must be 4 to 8 digits', 'err');
+  if (a !== b) return toast('PINs do not match', 'err');
+  const r = await sendCmd('SETPIN=' + a);
+  $('newPin1').value = $('newPin2').value = '';
+  toast(r.ok ? 'PIN created. Settings unlocked.' : r.msg, r.ok ? 'ok' : 'err');
+}
+
+async function login() {
+  const p = $('loginPin').value;
+  if (!isPin(p)) return toast('PIN must be 4 to 8 digits', 'err');
+  const r = await sendCmd('LOGIN=' + p);
+  $('loginPin').value = '';
+  if (r.ok) { dirty.clear(); await sendCmd('GET'); toast('Settings unlocked', 'ok'); }
+  else toast(r.msg, 'err');
+}
+
+async function saveSettings() {
+  const fields = [
+    ['UPI', v => /^[A-Za-z0-9._-]{2,}@[A-Za-z0-9]{2,}$/.test(v) && v.length <= 50, 'UPI ID must look like name@bank'],
+    ['NAME', v => v.length > 0 && isText(v, 40), 'Payee name: 1 to 40 plain characters'],
+    ['TOP1', v => isText(v, 20), 'Top line 1: max 20 characters'],
+    ['TOP2', v => isText(v, 20), 'Top line 2: max 20 characters'],
+    ['BOT',  v => isText(v, 20), 'Bottom number: max 20 characters'],
+    ['TIMEOUT', v => /^\d+$/.test(v) && Number(v) <= 60, 'Clear time: 0 to 60 minutes'],
+  ];
+  // Check everything first, then send only what changed
+  const changes = [];
+  for (const [key, ok, err] of fields) {
+    const v = oneLine($('f_' + key).value);
+    if (!ok(v)) return toast(err, 'err');
+    if (v !== (info[key] || '')) changes.push([key, v]);
+  }
+  if (!changes.length) return toast('Nothing changed');
+  if (changes.some(c => c[0] === 'UPI') &&
+      !confirm('Change UPI ID to ' + $('f_UPI').value.trim() + '?\nAll payments will go to this ID.')) return;
+
+  $('saveBtn').disabled = true;
+  try {
+    for (const [key, v] of changes) {
+      const r = await sendCmd(key + '=' + v);
+      if (!r.ok) return toast(r.msg, 'err');
+      dirty.delete(key);
+    }
+    toast('Saved on the display', 'ok');
+  } finally { $('saveBtn').disabled = false; }
+}
+
+async function changePin() {
+  const a = $('chPin1').value, b = $('chPin2').value;
+  if (!isPin(a)) return toast('PIN must be 4 to 8 digits', 'err');
+  if (a !== b) return toast('PINs do not match', 'err');
+  const r = await sendCmd('SETPIN=' + a);
+  $('chPin1').value = $('chPin2').value = '';
+  toast(r.ok ? 'PIN changed' : r.msg, r.ok ? 'ok' : 'err');
+}
+
+async function logout() {
+  const r = await sendCmd('LOGOUT');
+  toast(r.ok ? 'Settings locked' : r.msg, r.ok ? 'ok' : 'err');
+}
+
+async function unpairAll() {
+  if (!confirm('Remove ALL paired phones, including this one?\nEvery phone must pair again with the BOOT button.')) return;
+  ble.userDisconnect = true;
+  const r = await sendCmd('UNPAIR');
+  if (r.ok) alert('Done. Also open Android Bluetooth settings and tap "Forget" on ' + (info.DEV || 'the display') + '.');
+  else toast(r.msg, 'err');
+}
+
+// ============================== WIRING ==============================
+function init() {
+  if (!navigator.bluetooth) {
+    $('unsupported').hidden = false;
+    $('welcome').hidden = true;
+    $('connBtn').disabled = true;
+    setStatus('Bluetooth not supported in this browser', 'err');
+    return;
+  }
+
+  $('connBtn').onclick = () => (ble.connected ? disconnect() : connect());
+
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+    $('tab-bill').hidden = b.dataset.tab !== 'bill';
+    $('tab-settings').hidden = b.dataset.tab !== 'settings';
+    if (b.dataset.tab === 'settings') renderSettingsView();
+  });
+
+  $('keypad').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) pressKey(b.dataset.key || b.textContent.trim());
+  });
+  document.querySelectorAll('.chip').forEach(c => c.onclick = () => addAmount(Number(c.dataset.add)));
+  $('sendBtn').onclick = sendAmount;
+  $('clearBtn').onclick = clearAmount;
+
+  $('createPinBtn').onclick = createPin;
+  $('loginBtn').onclick = login;
+  $('loginPin').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  $('saveBtn').onclick = saveSettings;
+  $('changePinBtn').onclick = changePin;
+  $('logoutBtn').onclick = logout;
+  $('unpairBtn').onclick = unpairAll;
+  ['UPI', 'NAME', 'TOP1', 'TOP2', 'BOT', 'TIMEOUT'].forEach(k =>
+    $('f_' + k).addEventListener('input', () => dirty.add(k)));
+
+  // Offline support + "Add to Home screen" (needs https or localhost)
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+init();
+</script>
+</body>
+</html>
